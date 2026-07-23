@@ -23,6 +23,16 @@ final class RendererTest extends TestCase {
 		self::assertSame( 'a b', $document->pdf_text( "a\x00 b" ) );
 	}
 
+	public function test_standard_woocommerce_typography_is_transliterated(): void {
+		$snapshot = PDA_Product_Snapshot::normalize( array(
+			'product_id' => 5, 'title' => "Deluxe \u{2014} \u{201C}European\u{201D} model", 'fields' => array(
+				array( 'id' => 'core_sku', 'label' => 'Price', 'value' => "\u{20AC}49.99 / \u{00A3}42.00" ),
+			),
+		) );
+		$pdf      = ( new PDA_PDF_Renderer() )->render( $snapshot, ( new PDA_Deterministic_Mapper() )->map( $snapshot ) );
+		self::assertStringStartsWith( '%PDF', $pdf );
+	}
+
 	public function test_fifty_short_fields_fit_the_two_page_contract(): void {
 		$fields = array();
 		for ( $index = 0; $index < 50; ++$index ) {

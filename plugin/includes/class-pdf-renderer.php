@@ -65,8 +65,8 @@ class PDA_FPDF_Document extends \Fpdf\Fpdf {
 
 	/**
 	 * The bundled FPDF implementation uses WinAnsi content streams. Control
-	 * characters are removed; text beyond that map is rejected before rendering
-	 * because transliteration would silently change a seller-provided value.
+	 * characters are removed and common typography is already normalized by the
+	 * renderer before it reaches this last encoding boundary.
 	 *
 	 * @param string $text Store text.
 	 * @return string
@@ -74,7 +74,7 @@ class PDA_FPDF_Document extends \Fpdf\Fpdf {
 	public function pdf_text( $text ) {
 		$text = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) $text );
 		if ( function_exists( 'iconv' ) ) {
-			$converted = iconv( 'UTF-8', 'Windows-1252', $text );
+			$converted = iconv( 'UTF-8', 'Windows-1252//TRANSLIT', $text );
 			if ( false !== $converted ) {
 				return $converted;
 			}
@@ -122,6 +122,7 @@ class PDA_PDF_Renderer {
 		if ( ! class_exists( '\\Fpdf\\Fpdf' ) || ! class_exists( 'PDA_FPDF_Document' ) ) {
 			throw new PDA_Render_Exception( 'FPDF library is missing. Reinstall the plugin package so vendor/autoload.php is present.' );
 		}
+		$snapshot = $this->normalize_snapshot_text( $snapshot );
 		$this->assert_text_representable( $snapshot );
 		$ordered = $this->ordered_fields( $snapshot, $map );
 		$omitted = $this->fields_to_omit( $ordered, ! empty( $snapshot['image_attachment_id'] ) );
@@ -260,6 +261,75 @@ class PDA_PDF_Renderer {
 	}
 
 	/**
+	 * Normalize commonly auto-formatted WooCommerce and WordPress text before
+	 * validating it for the WinAnsi FPDF output encoding.
+	 *
+	 * @param array<string,mixed> $snapshot Snapshot.
+	 * @return array<string,mixed>
+	 * @throws PDA_Render_Exception For invalid or unsupported text.
+	 */
+	private function normalize_snapshot_text( array $snapshot ) {
+		$snapshot['title']         = $this->normalize_pdf_text( (string) $snapshot['title'] );
+		$snapshot['branding_name'] = $this->normalize_pdf_text( (string) $snapshot['branding_name'] );
+		foreach ( $snapshot['fields'] as $index => $field ) {
+			$snapshot['fields'][ $index ]['label'] = $this->normalize_pdf_text( (string) $field['label'] );
+			$snapshot['fields'][ $index ]['value'] = $this->normalize_pdf_text( (string) $field['value'] );
+		}
+		return $snapshot;
+	}
+
+	/**
+	 * Keep ordinary store typography legible while rejecting data that cannot be
+	 * represented without an unknown or lossy substitution.
+	 *
+	 * @param string $text Store text.
+	 * @return string UTF-8 text normalized for FPDF conversion.
+	 * @throws PDA_Render_Exception For invalid or unsupported text.
+	 */
+	private function normalize_pdf_text( $text ) {
+		$text = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text );
+		if ( null === $text || 1 !== preg_match( '//u', $text ) ) {
+			throw new PDA_Render_Exception( 'unsupported_characters' );
+		}
+		$text = strtr(
+			$text,
+			array(
+				"\u{00A0}" => ' ',
+				"\u{2018}" => "'",
+				"\u{2019}" => "'",
+				"\u{201A}" => "'",
+				"\u{201B}" => "'",
+				"\u{201C}" => '"',
+				"\u{201D}" => '"',
+				"\u{201E}" => '"',
+				"\u{201F}" => '"',
+				"\u{2010}" => '-',
+				"\u{2011}" => '-',
+				"\u{2013}" => '-',
+				"\u{2014}" => '-',
+				"\u{2212}" => '-',
+				"\u{2026}" => '...',
+				"\u{20AC}" => 'EUR',
+				"\u{00A3}" => 'GBP',
+				"\u{00A5}" => 'JPY',
+			)
+		);
+		if ( ! function_exists( 'iconv' ) ) {
+			return $text;
+		}
+		$transliterated = @iconv( 'UTF-8', 'Windows-1252//TRANSLIT', $text );
+		$strict         = @iconv( 'UTF-8', 'Windows-1252', $text );
+		if ( false === $transliterated || false === $strict || $strict !== $transliterated ) {
+			throw new PDA_Render_Exception( 'unsupported_characters' );
+		}
+		$normalized = iconv( 'Windows-1252', 'UTF-8', $transliterated );
+		if ( false === $normalized ) {
+			throw new PDA_Render_Exception( 'unsupported_characters' );
+		}
+		return $normalized;
+	}
+
+	/**
 	 * FPDF's generated WinAnsi font map cannot safely preserve every Unicode
 	 * codepoint. Fail visibly instead of publishing a changed specification.
 	 *
@@ -275,8 +345,8 @@ class PDA_PDF_Renderer {
 		}
 		foreach ( $values as $value ) {
 			if ( function_exists( 'iconv' ) ) {
-				$encoded = iconv( 'UTF-8', 'Windows-1252//IGNORE', $value );
-				if ( false === $encoded || $value !== iconv( 'Windows-1252', 'UTF-8', $encoded ) ) {
+				$encoded = iconv( 'UTF-8', 'Windows-1252', $value );
+				if ( false === $encoded || false === iconv( 'Windows-1252', 'UTF-8', $encoded ) ) {
 					throw new PDA_Render_Exception( 'unsupported_characters' );
 				}
 			}
