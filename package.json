@@ -1,0 +1,36 @@
+{
+  "name": "product-datasheet-autopilot",
+  "version": "1.0.0",
+  "description": "Product Datasheet Autopilot for WooCommerce",
+  "private": true,
+  "workspaces": ["gateway"],
+  "scripts": {
+    "test": "npm run test:gateway",
+    "test:gateway": "npm --workspace gateway test",
+    "lint": "npm run lint:gateway",
+    "lint:gateway": "npm --workspace gateway run lint",
+    "build:free": "php scripts/build.php free",
+    "build:pro": "php scripts/build.php pro",
+    "package:free": "php scripts/package.php free",
+    "package:pro": "php scripts/package.php pro"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trag223/product-datasheet-autopilot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "GPL-2.0-or-later",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/trag223/product-datasheet-autopilot/issues"
+  },
+  "homepage": "https://github.com/trag223/product-datasheet-autopilot#readme",
+  "devDependencies": {
+    "@wordpress/env": "^11.11.0",
+    "eslint": "^10.7.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.113.0"
+  }
+}

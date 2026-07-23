@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="Product Datasheet Autopilot">
+  <description>Security-focused WordPress Coding Standards for the plugin.</description>
+  <file>plugin</file>
+  <exclude-pattern>plugin/vendor/*</exclude-pattern>
+  <!-- The blueprint mandates class-bootstrap.php-style filenames, which differ
+       from WPCS's class-name convention. Formatting is handled by review; CI
+       blocks the WordPress security and database safety rules below. -->
+  <rule ref="WordPress.Security" />
+  <rule ref="WordPress.DB" />
+  <rule ref="WordPress.NamingConventions.ValidHookName" />
+  <config name="minimum_supported_wp_version" value="6.9" />
+</ruleset>

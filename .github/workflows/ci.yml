@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  plugin:
+    name: Plugin / WP ${{ matrix.wp }} / Woo ${{ matrix.woo }} / PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { wp: '6.9', woo: '10.8', php: '8.1' }
+          - { wp: 'latest', woo: 'latest', php: '8.3' }
+          - { wp: 'latest', woo: 'latest', php: '8.4' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '${{ matrix.php }}', tools: composer:v2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: composer install --prefer-dist --no-interaction
+      - run: npm ci
+      - run: vendor/bin/phpcs --standard=phpcs.xml.dist
+      - run: vendor/bin/phpunit
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build:free
+      - run: npm run build:pro
+      - name: Plugin Check
+        uses: 10up/wp-plugin-check-action@stable
+        with:
+          build-dir: plugin
+
+  packages:
+    needs: plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.3', tools: composer:v2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: composer install --prefer-dist --no-interaction
+      - run: npm ci
+      - run: npm run package:free
+      - run: npm run package:pro
+      - uses: actions/upload-artifact@v4
+        with: { name: release-zips, path: 'dist/*.zip*' }

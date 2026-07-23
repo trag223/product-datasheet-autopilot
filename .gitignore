@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+node_modules/
+vendor/
+plugin/vendor/
+dist/*.zip
+dist/*.sha256
+dist/build/
+.wp-env/
+.phpunit.cache/
+coverage/
+gateway/coverage/
+gateway/.wrangler/
+*.log

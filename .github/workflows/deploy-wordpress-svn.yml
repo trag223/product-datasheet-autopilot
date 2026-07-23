@@ -1,0 +1,38 @@
+name: Release packages
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    environment: security-review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.3', tools: composer:v2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: composer install --prefer-dist --no-interaction
+      - run: npm ci
+      - run: npm test && vendor/bin/phpunit
+      - run: npm run package:free && npm run package:pro
+      - name: Publish release artifacts
+        uses: softprops/action-gh-release@v2
+        with: { files: 'dist/*.zip*' }
+      - name: Upload Pro artifact to Freemius
+        if: ${{ secrets.FREEMIUS_DEPLOY_URL != '' }}
+        env:
+          FREEMIUS_DEPLOY_URL: ${{ secrets.FREEMIUS_DEPLOY_URL }}
+          FREEMIUS_API_SECRET_KEY: ${{ secrets.FREEMIUS_API_SECRET_KEY }}
+        run: |
+          set -eu
+          curl --fail --show-error --request POST "$FREEMIUS_DEPLOY_URL" \
+            --header "Authorization: Bearer $FREEMIUS_API_SECRET_KEY" \
+            --form "artifact=@dist/product-datasheet-autopilot-pro-1.0.0.zip"
+      - name: Stage WordPress.org SVN deploy instructions
+        run: echo "Run scripts/svn-deploy.sh after human WP.org review; this workflow does not submit to SVN."

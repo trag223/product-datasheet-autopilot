@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/bootstrap.php" colors="true" cacheDirectory=".phpunit.cache">
+  <testsuites>
+    <testsuite name="unit"><directory>tests/unit</directory></testsuite>
+  </testsuites>
+  <source><include><directory suffix=".php">plugin/includes</directory></include></source>
+</phpunit>

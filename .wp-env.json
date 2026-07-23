@@ -1,0 +1,7 @@
+{
+  "core": "WordPress/WordPress#6.9",
+  "plugins": ["./plugin", "woocommerce/woocommerce#10.8.0"],
+  "phpVersion": "8.3",
+  "port": 8888,
+  "testsPort": 8889
+}
