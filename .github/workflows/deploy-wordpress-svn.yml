@@ -25,7 +25,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with: { files: 'dist/*.zip*' }
       - name: Upload Pro artifact to Freemius
-        if: ${{ secrets.FREEMIUS_DEPLOY_URL != '' }}
         env:
           FREEMIUS_DEPLOY_URL: ${{ secrets.FREEMIUS_DEPLOY_URL }}
           FREEMIUS_API_SECRET_KEY: ${{ secrets.FREEMIUS_API_SECRET_KEY }}

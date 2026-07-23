@@ -31,7 +31,7 @@ jobs:
       - run: npm run build:free
       - run: npm run build:pro
       - name: Plugin Check
-        uses: 10up/wp-plugin-check-action@stable
+        uses: wordpress/plugin-check-action@v1
         with:
           build-dir: plugin
 
