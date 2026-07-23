@@ -79,7 +79,12 @@ class PDA_Bootstrap {
 function pda_sections() {
 	static $sections = null;
 	if ( null === $sections ) {
-		$sections = require PDA_DIR . '../config/sections.php';
+		$sections_file = PDA_DIR . 'config/sections.php';
+		if ( ! is_readable( $sections_file ) ) {
+			// Support a source checkout while release builds always use the first path.
+			$sections_file = PDA_DIR . '../config/sections.php';
+		}
+		$sections = require $sections_file;
 	}
 	return $sections;
 }

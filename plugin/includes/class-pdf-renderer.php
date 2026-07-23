@@ -9,6 +9,7 @@ defined( 'ABSPATH' ) || exit;
 
 class PDA_Render_Exception extends RuntimeException {}
 
+if ( class_exists( '\\Fpdf\\Fpdf' ) ) {
 class PDA_FPDF_Document extends \Fpdf\Fpdf {
 	/** @var string */
 	private $footer_text;
@@ -50,7 +51,7 @@ class PDA_FPDF_Document extends \Fpdf\Fpdf {
 			$this->AddFont( 'Noto', '', 'NotoSans-Regular.json', $directory );
 			$this->AddFont( 'Noto', 'B', 'NotoSans-Bold.json', $directory );
 			$this->font_family = 'Noto';
-		} catch ( Exception $exception ) {
+		} catch ( Throwable $exception ) {
 			$this->font_family = 'Helvetica';
 		}
 	}
@@ -81,6 +82,7 @@ class PDA_FPDF_Document extends \Fpdf\Fpdf {
 		return $text;
 	}
 }
+}
 
 class PDA_PDF_Renderer {
 	/** @var int */
@@ -97,8 +99,28 @@ class PDA_PDF_Renderer {
 	 * @throws PDA_Render_Exception On unsafe or oversized documents.
 	 */
 	public function render( array $snapshot, array $map ) {
-		if ( ! class_exists( '\\Fpdf\\Fpdf' ) ) {
-			throw new PDA_Render_Exception( 'pdf_library_missing' );
+		try {
+			return $this->render_document( $snapshot, $map );
+		} catch ( PDA_Render_Exception $exception ) {
+			throw $exception;
+		} catch ( Throwable $exception ) {
+			$message = trim( $exception->getMessage() );
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This exact exception detail is passed to a capability-gated admin notice, not output here.
+			throw new PDA_Render_Exception( 'FPDF rendering failed: ' . ( '' !== $message ? $message : get_class( $exception ) ), 0, $exception );
+		}
+	}
+
+	/**
+	 * Render the fixed layout once the FPDF runtime is available.
+	 *
+	 * @param array<string,mixed> $snapshot Snapshot.
+	 * @param array<string,mixed> $map Validated field map.
+	 * @return string
+	 * @throws PDA_Render_Exception On unsafe or oversized documents.
+	 */
+	private function render_document( array $snapshot, array $map ) {
+		if ( ! class_exists( '\\Fpdf\\Fpdf' ) || ! class_exists( 'PDA_FPDF_Document' ) ) {
+			throw new PDA_Render_Exception( 'FPDF library is missing. Reinstall the plugin package so vendor/autoload.php is present.' );
 		}
 		$this->assert_text_representable( $snapshot );
 		$ordered = $this->ordered_fields( $snapshot, $map );
@@ -146,7 +168,7 @@ class PDA_PDF_Renderer {
 		}
 		$data = $pdf->Output( 'S' );
 		if ( ! is_string( $data ) || 0 !== strpos( $data, '%PDF' ) ) {
-			throw new PDA_Render_Exception( 'invalid_pdf' );
+			throw new PDA_Render_Exception( 'FPDF produced invalid PDF output.' );
 		}
 		return $data;
 	}
@@ -167,7 +189,7 @@ class PDA_PDF_Renderer {
 		if ( $image ) {
 			try {
 				$pdf->Image( $image, 154, 14, 40, 40 );
-			} catch ( Exception $exception ) {
+			} catch ( Throwable $exception ) {
 				// A bad image must not prevent the PDF from being generated.
 			}
 		}

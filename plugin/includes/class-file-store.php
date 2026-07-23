@@ -7,6 +7,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
+class PDA_File_Store_Exception extends RuntimeException {}
+
 class PDA_File_Store {
 	/** @var PDA_Telemetry */
 	private $telemetry;
@@ -34,31 +36,103 @@ class PDA_File_Store {
 	 * @param string $hash SHA-256 content hash.
 	 * @param string $pdf PDF data.
 	 * @return bool
+	 * @throws PDA_File_Store_Exception When a PDF cannot be safely published.
 	 */
 	public function publish( $product_id, $hash, $pdf ) {
-		if ( ! preg_match( '/^[a-f0-9]{64}$/', $hash ) || ! is_string( $pdf ) || 0 !== strpos( $pdf, '%PDF' ) || strlen( $pdf ) <= 1024 || $this->page_count( $pdf ) > 2 ) {
-			return false;
+		try {
+			if ( ! preg_match( '/^[a-f0-9]{64}$/', $hash ) || ! is_string( $pdf ) || 0 !== strpos( $pdf, '%PDF' ) || strlen( $pdf ) <= 1024 || $this->page_count( $pdf ) > 2 ) {
+				throw new PDA_File_Store_Exception( 'The rendered PDF failed validation before it could be saved.' );
+			}
+			$path      = $this->path( $product_id, $hash );
+			$directory = dirname( $path );
+			$mkdir     = $this->run_file_operation(
+				static function() use ( $directory ) {
+					return wp_mkdir_p( $directory );
+				},
+				$mkdir_error
+			);
+			if ( ! $mkdir ) {
+				throw new PDA_File_Store_Exception( $this->operation_error( 'Unable to create PDF directory ' . $directory . '.', $mkdir_error ) );
+			}
+			$temp    = $path . '.' . wp_generate_password( 12, false, false ) . '.tmp';
+			$written = $this->run_file_operation(
+				static function() use ( $temp, $pdf ) {
+					return file_put_contents( $temp, $pdf, LOCK_EX );
+				},
+				$write_error
+			);
+			if ( false === $written ) {
+				throw new PDA_File_Store_Exception( $this->operation_error( 'Unable to write temporary PDF file ' . $temp . '.', $write_error ) );
+			}
+			if ( ! $this->is_valid_file( $temp ) ) {
+				throw new PDA_File_Store_Exception( 'Temporary PDF file failed validation: ' . $temp . '.' );
+			}
+			$published = $this->run_file_operation(
+				static function() use ( $temp, $path ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
+					return rename( $temp, $path );
+				},
+				$rename_error
+			);
+			if ( ! $published ) {
+				throw new PDA_File_Store_Exception( $this->operation_error( 'Unable to publish PDF file ' . $path . '.', $rename_error ) );
+			}
+			update_post_meta( $product_id, '_pda_pdf_hash', $hash );
+			update_post_meta( $product_id, '_pda_pdf_generated_at', time() );
+			delete_post_meta( $product_id, '_pda_pdf_stale' );
+			return true;
+		} catch ( PDA_File_Store_Exception $exception ) {
+			$this->cleanup_temp_file( isset( $temp ) ? $temp : '' );
+			throw $exception;
+		} catch ( Throwable $exception ) {
+			$this->cleanup_temp_file( isset( $temp ) ? $temp : '' );
+			$message = trim( $exception->getMessage() );
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- This exact exception detail is passed to a capability-gated admin notice, not output here.
+			throw new PDA_File_Store_Exception( 'PDF publication failed: ' . ( '' !== $message ? $message : get_class( $exception ) ), 0, $exception );
 		}
-		$path = $this->path( $product_id, $hash );
-		if ( ! wp_mkdir_p( dirname( $path ) ) ) {
-			return false;
+	}
+
+	/**
+	 * Execute an operation that may otherwise emit an unhelpful PHP warning.
+	 *
+	 * @param callable $operation Filesystem operation.
+	 * @param string   $error_message Captured PHP warning, if any.
+	 * @return mixed
+	 */
+	private function run_file_operation( $operation, &$error_message ) {
+		$error_message = '';
+		set_error_handler(
+			static function( $severity, $message ) use ( &$error_message ) {
+				$error_message = (string) $message;
+				return true;
+			}
+		);
+		try {
+			return call_user_func( $operation );
+		} finally {
+			restore_error_handler();
 		}
-		$temp = $path . '.' . wp_generate_password( 12, false, false ) . '.tmp';
-		if ( false === file_put_contents( $temp, $pdf, LOCK_EX ) ) {
-			return false;
+	}
+
+	/**
+	 * @param string $fallback Error fallback.
+	 * @param string $captured Captured PHP warning.
+	 * @return string
+	 */
+	private function operation_error( $fallback, $captured ) {
+		return '' !== $captured ? $captured : $fallback . ' Check filesystem permissions and available disk space.';
+	}
+
+	/**
+	 * @param string $temp Temporary path.
+	 * @return void
+	 */
+	private function cleanup_temp_file( $temp ) {
+		if ( '' === $temp || ! file_exists( $temp ) ) {
+			return;
 		}
-		$valid_temp = $this->is_valid_file( $temp );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
-		$published = $valid_temp && @rename( $temp, $path );
-		if ( ! $published ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
-			@unlink( $temp );
-			return false;
-		}
-		update_post_meta( $product_id, '_pda_pdf_hash', $hash );
-		update_post_meta( $product_id, '_pda_pdf_generated_at', time() );
-		delete_post_meta( $product_id, '_pda_pdf_stale' );
-		return true;
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+		unlink( $temp );
 	}
 
 	/**

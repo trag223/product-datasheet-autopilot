@@ -56,11 +56,18 @@ class PDA_Admin_Page {
 		$settings = PDA_Settings::all();
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- This is a sanitized fixed status code set by the nonce-protected POST redirect below.
 		$status   = isset( $_GET['pda_status'] ) ? sanitize_key( wp_unslash( $_GET['pda_status'] ) ) : '';
+		$error_detail = '';
+		if ( '' !== $status ) {
+			$error_detail = (string) get_transient( $this->error_transient_key() );
+			if ( '' !== $error_detail ) {
+				delete_transient( $this->error_transient_key() );
+			}
+		}
 		?>
 		<div class="wrap pda-admin">
 			<h1><?php esc_html_e( 'Product Datasheet Autopilot', 'product-datasheet-autopilot' ); ?></h1>
 			<?php if ( $status ) : ?>
-				<div class="notice <?php echo 'success' === $status ? 'notice-success' : 'notice-error'; ?>"><p><?php echo esc_html( $this->status_message( $status ) ); ?></p></div>
+				<div class="notice <?php echo 'success' === $status ? 'notice-success' : 'notice-error'; ?>"><p><?php echo esc_html( $this->status_message( $status ) ); ?></p><?php if ( '' !== $error_detail ) : ?><p><strong><?php esc_html_e( 'Exact error:', 'product-datasheet-autopilot' ); ?></strong> <code><?php echo esc_html( $error_detail ); ?></code></p><?php endif; ?></div>
 			<?php endif; ?>
 			<p><?php esc_html_e( 'Generate a truthful, fixed-layout PDF from existing WooCommerce product data.', 'product-datasheet-autopilot' ); ?></p>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -91,17 +98,56 @@ class PDA_Admin_Page {
 			wp_die( esc_html__( 'You do not have permission to generate datasheets.', 'product-datasheet-autopilot' ) );
 		}
 		check_admin_referer( 'pda_generate_preview' );
-		$products = wc_get_products( array( 'status' => 'publish', 'limit' => 3, 'orderby' => 'modified', 'order' => 'DESC', 'return' => 'objects' ) );
-		$status   = 'success';
-		foreach ( $products as $product ) {
-			$result = $this->runner->generate( $product->get_id(), 'admin_preview' );
-			if ( empty( $result['success'] ) ) {
-				$status = sanitize_key( (string) $result['error'] );
-				break;
+		$status       = 'success';
+		$error_detail = '';
+		try {
+			$products = wc_get_products( array( 'status' => 'publish', 'limit' => 3, 'orderby' => 'modified', 'order' => 'DESC', 'return' => 'objects' ) );
+			foreach ( $products as $product ) {
+				$result = $this->runner->generate( $product->get_id(), 'admin_preview' );
+				if ( empty( $result['success'] ) ) {
+					$error_detail = isset( $result['error'] ) ? (string) $result['error'] : 'Generation failed without an error message.';
+					$status       = $this->failure_status( $error_detail );
+					break;
+				}
 			}
+		} catch ( Throwable $exception ) {
+			$error_detail = trim( $exception->getMessage() );
+			$error_detail = '' !== $error_detail ? $error_detail : get_class( $exception );
+			$status       = 'generation_failed';
+		}
+		if ( 'success' !== $status ) {
+			$this->record_generation_error( $error_detail );
 		}
 		wp_safe_redirect( add_query_arg( array( 'page' => 'product-datasheet-autopilot', 'pda_status' => $status ), admin_url( 'admin.php' ) ) );
 		exit;
+	}
+
+	/**
+	 * @param string $error Error detail.
+	 * @return string
+	 */
+	private function failure_status( $error ) {
+		$known = array( 'free_product_limit', 'field_limit', 'document_overflow' );
+		return in_array( $error, $known, true ) ? $error : 'generation_failed';
+	}
+
+	/**
+	 * @return string
+	 */
+	private function error_transient_key() {
+		return 'pda_generation_error_' . get_current_user_id();
+	}
+
+	/**
+	 * @param string $error Exact local failure detail.
+	 * @return void
+	 */
+	private function record_generation_error( $error ) {
+		$error = trim( $error );
+		$error = '' !== $error ? $error : 'Generation failed without an error message.';
+		set_transient( $this->error_transient_key(), $error, MINUTE_IN_SECONDS );
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Local generation failures must be available to site administrators.
+		error_log( '[Product Datasheet Autopilot] Admin preview generation failed: ' . $error );
 	}
 
 	/**
@@ -114,6 +160,7 @@ class PDA_Admin_Page {
 			'free_product_limit' => __( 'The free edition can generate up to three distinct products. Upgrade to Pro for unlimited products.', 'product-datasheet-autopilot' ),
 			'field_limit'        => __( 'This product has more than 50 eligible fields. Reduce visible attributes or selected custom fields.', 'product-datasheet-autopilot' ),
 			'document_overflow'  => __( 'This product cannot fit in the two-page fixed layout without omitting too many fields.', 'product-datasheet-autopilot' ),
+			'generation_failed'  => __( 'The datasheet could not be generated. The exact error is shown below and was written to the PHP error log.', 'product-datasheet-autopilot' ),
 		);
 		return $messages[ $status ] ?? __( 'The datasheet could not be generated. Check WooCommerce → Status → Datasheet Autopilot for a redacted diagnostic code.', 'product-datasheet-autopilot' );
 	}

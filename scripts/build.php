@@ -20,6 +20,7 @@ if ( str_replace( '\\', '/', realpath( dirname( $stage_root ) ) ?: dirname( $sta
 }
 delete_tree( $stage_root );
 copy_tree( $root . DIRECTORY_SEPARATOR . 'plugin', $plugin_stage, array( '/vendor/', '/languages/' ) );
+copy_tree( $root . DIRECTORY_SEPARATOR . 'config', $plugin_stage . DIRECTORY_SEPARATOR . 'config' );
 if ( 'free' === $mode ) {
 	delete_tree( $plugin_stage . DIRECTORY_SEPARATOR . 'premium' );
 }

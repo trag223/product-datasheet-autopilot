@@ -69,12 +69,18 @@ class PDA_Job_Runner {
 			if ( $this->store->is_current( $product_id, $hash ) ) {
 				return array( 'success' => true, 'skipped' => true, 'hash' => $hash );
 			}
+			// Local mapping is always available and is the only path for an
+			// unconsented or unconfigured installation.
 			$map      = $this->mapper->map( $snapshot );
-			$fallback = false;
-			$ai_map   = $this->ai->map( $snapshot );
+			$fallback = true;
+			$ai_map   = null;
+			if ( PDA_Settings::ai_is_consented() && apply_filters( 'pda_ai_available', false ) ) {
+				$ai_map = $this->ai->map( $snapshot );
+			}
 			if ( is_array( $ai_map ) ) {
 				try {
 					$map = $this->validator->assert_valid( $ai_map, $snapshot );
+					$fallback = false;
 				} catch ( PDA_Map_Validation_Exception $exception ) {
 					$fallback = true;
 					$this->telemetry->record( 'ai_invalid_map' );
@@ -82,14 +88,18 @@ class PDA_Job_Runner {
 			}
 			$pdf = $this->renderer->render( $snapshot, $this->validator->assert_valid( $map, $snapshot ) );
 			if ( ! $this->store->publish( $product_id, $hash, $pdf ) ) {
-				throw new RuntimeException( 'publish_failed' );
+				throw new RuntimeException( 'PDF publication did not report success.' );
 			}
 			$this->remember_generated_product( $product_id );
 			$this->telemetry->record( 'generation_succeeded' );
 			return array( 'success' => true, 'hash' => $hash, 'fallback' => $fallback );
 		} catch ( Throwable $exception ) {
+			$message = trim( $exception->getMessage() );
+			$message = '' !== $message ? $message : get_class( $exception );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- Local generation failures must be available to site administrators.
+			error_log( '[Product Datasheet Autopilot] PDF generation failed: ' . $message );
 			$this->telemetry->record( 'generation_failed' );
-			return array( 'success' => false, 'error' => $exception->getMessage() );
+			return array( 'success' => false, 'error' => $message );
 		}
 	}
 
