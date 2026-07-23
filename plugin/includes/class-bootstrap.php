@@ -22,8 +22,7 @@ class PDA_Bootstrap {
 		if ( false === get_option( PDA_Settings::OPTION, false ) ) {
 			add_option( PDA_Settings::OPTION, PDA_Settings::defaults(), '', false );
 		}
-		add_rewrite_rule( '^product-datasheet/([0-9]+)\\.pdf$', 'index.php?pda_product_datasheet=$matches[1]', 'top' );
-		flush_rewrite_rules();
+		update_option( 'pda_rewrite_flush_pending', 1, false );
 	}
 
 	/**

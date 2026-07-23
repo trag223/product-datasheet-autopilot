@@ -22,9 +22,23 @@ class PDA_Download_Endpoint {
 
 	/** @return void */
 	public function register() {
+		add_action( 'init', array( $this, 'register_routes' ) );
+	}
+
+	/**
+	 * Register routes only after WordPress has initialized its rewrite subsystem.
+	 *
+	 * @return void
+	 */
+	public function register_routes() {
 		add_rewrite_rule( '^product-datasheet/([0-9]+)\\.pdf$', 'index.php?pda_product_datasheet=$matches[1]', 'top' );
 		add_filter( 'query_vars', array( $this, 'query_vars' ) );
 		add_action( 'template_redirect', array( $this, 'serve' ) );
+
+		if ( (bool) get_option( 'pda_rewrite_flush_pending', false ) ) {
+			flush_rewrite_rules();
+			delete_option( 'pda_rewrite_flush_pending' );
+		}
 	}
 
 	/**
