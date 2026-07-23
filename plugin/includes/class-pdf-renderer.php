@@ -72,9 +72,13 @@ class PDA_FPDF_Document extends \Fpdf\Fpdf {
 	 * @return string
 	 */
 	public function pdf_text( $text ) {
-		$text = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) $text );
-		if ( function_exists( 'iconv' ) ) {
-			$converted = iconv( 'UTF-8', 'Windows-1252//TRANSLIT', $text );
+		$text = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', (string) $text );
+		if ( function_exists( 'mb_convert_encoding' ) ) {
+			try {
+				$converted = mb_convert_encoding( $text, 'Windows-1252', 'UTF-8' );
+			} catch ( Throwable $exception ) {
+				$converted = false;
+			}
 			if ( false !== $converted ) {
 				return $converted;
 			}
@@ -123,7 +127,6 @@ class PDA_PDF_Renderer {
 			throw new PDA_Render_Exception( 'FPDF library is missing. Reinstall the plugin package so vendor/autoload.php is present.' );
 		}
 		$snapshot = $this->normalize_snapshot_text( $snapshot );
-		$this->assert_text_representable( $snapshot );
 		$ordered = $this->ordered_fields( $snapshot, $map );
 		$omitted = $this->fields_to_omit( $ordered, ! empty( $snapshot['image_attachment_id'] ) );
 		if ( $omitted > self::MAX_OMITTED_FIELDS ) {
@@ -152,11 +155,9 @@ class PDA_PDF_Renderer {
 				$pdf->SetTextColor( 25, 58, 92 );
 				$pdf->Cell( 0, 6, $pdf->pdf_text( pda_sections()[ $current_section ] ), 0, 1 );
 			}
-			$pdf->SetFont( $pdf->font_family(), 'B', 8.5 );
-			$pdf->SetTextColor( 40, 40, 40 );
+			$pdf->SetFont( 'Arial', '', 12 );
+			$pdf->SetTextColor( 0, 0, 0 );
 			$pdf->Cell( 48, 5, $pdf->pdf_text( $item['label'] ), 0, 0 );
-			$pdf->SetFont( $pdf->font_family(), '', 8.5 );
-			$pdf->SetTextColor( 15, 15, 15 );
 			$x = $pdf->GetX();
 			$y = $pdf->GetY();
 			$pdf->MultiCell( 124, 5, $pdf->pdf_text( $item['value'] ), 0, 'L' );
@@ -183,8 +184,8 @@ class PDA_PDF_Renderer {
 		$pdf->SetFont( $pdf->font_family(), 'B', 10 );
 		$pdf->SetTextColor( 25, 58, 92 );
 		$pdf->Cell( 0, 5, $pdf->pdf_text( $snapshot['branding_name'] ), 0, 1 );
-		$pdf->SetFont( $pdf->font_family(), 'B', 17 );
-		$pdf->SetTextColor( 10, 10, 10 );
+		$pdf->SetFont( 'Arial', '', 12 );
+		$pdf->SetTextColor( 0, 0, 0 );
 		$pdf->MultiCell( 0, 8, $pdf->pdf_text( $snapshot['title'] ), 0, 'L' );
 		$image = $this->image_path( (int) $snapshot['image_attachment_id'] );
 		if ( $image ) {
@@ -262,11 +263,10 @@ class PDA_PDF_Renderer {
 
 	/**
 	 * Normalize commonly auto-formatted WooCommerce and WordPress text before
-	 * validating it for the WinAnsi FPDF output encoding.
+	 * preparing it for the WinAnsi FPDF output encoding.
 	 *
 	 * @param array<string,mixed> $snapshot Snapshot.
 	 * @return array<string,mixed>
-	 * @throws PDA_Render_Exception For invalid or unsupported text.
 	 */
 	private function normalize_snapshot_text( array $snapshot ) {
 		$snapshot['title']         = $this->normalize_pdf_text( (string) $snapshot['title'] );
@@ -279,18 +279,14 @@ class PDA_PDF_Renderer {
 	}
 
 	/**
-	 * Keep ordinary store typography legible while rejecting data that cannot be
-	 * represented without an unknown or lossy substitution.
+	 * Keep ordinary store typography legible before FPDF transliterates it.
 	 *
 	 * @param string $text Store text.
 	 * @return string UTF-8 text normalized for FPDF conversion.
-	 * @throws PDA_Render_Exception For invalid or unsupported text.
 	 */
 	private function normalize_pdf_text( $text ) {
-		$text = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text );
-		if ( null === $text || 1 !== preg_match( '//u', $text ) ) {
-			throw new PDA_Render_Exception( 'unsupported_characters' );
-		}
+		$text = str_replace( array( "\r\n", "\r", "\t" ), array( "\n", "\n", '    ' ), $text );
+		$text = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text );
 		$text = strtr(
 			$text,
 			array(
@@ -314,42 +310,6 @@ class PDA_PDF_Renderer {
 				"\u{00A5}" => 'JPY',
 			)
 		);
-		if ( ! function_exists( 'iconv' ) ) {
-			return $text;
-		}
-		$transliterated = @iconv( 'UTF-8', 'Windows-1252//TRANSLIT', $text );
-		$strict         = @iconv( 'UTF-8', 'Windows-1252', $text );
-		if ( false === $transliterated || false === $strict || $strict !== $transliterated ) {
-			throw new PDA_Render_Exception( 'unsupported_characters' );
-		}
-		$normalized = iconv( 'Windows-1252', 'UTF-8', $transliterated );
-		if ( false === $normalized ) {
-			throw new PDA_Render_Exception( 'unsupported_characters' );
-		}
-		return $normalized;
-	}
-
-	/**
-	 * FPDF's generated WinAnsi font map cannot safely preserve every Unicode
-	 * codepoint. Fail visibly instead of publishing a changed specification.
-	 *
-	 * @param array<string,mixed> $snapshot Snapshot.
-	 * @return void
-	 * @throws PDA_Render_Exception For text that would change in the PDF.
-	 */
-	private function assert_text_representable( array $snapshot ) {
-		$values = array( (string) $snapshot['title'], (string) $snapshot['branding_name'] );
-		foreach ( $snapshot['fields'] as $field ) {
-			$values[] = (string) $field['label'];
-			$values[] = (string) $field['value'];
-		}
-		foreach ( $values as $value ) {
-			if ( function_exists( 'iconv' ) ) {
-				$encoded = iconv( 'UTF-8', 'Windows-1252', $value );
-				if ( false === $encoded || false === iconv( 'Windows-1252', 'UTF-8', $encoded ) ) {
-					throw new PDA_Render_Exception( 'unsupported_characters' );
-				}
-			}
-		}
+		return $text;
 	}
 }

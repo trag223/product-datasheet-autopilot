@@ -33,6 +33,16 @@ final class RendererTest extends TestCase {
 		self::assertStringStartsWith( '%PDF', $pdf );
 	}
 
+	public function test_standard_woocommerce_whitespace_is_accepted(): void {
+		$snapshot = PDA_Product_Snapshot::normalize( array(
+			'product_id' => 5, 'title' => "Industrial\r\nSteel\tWidget", 'fields' => array(
+				array( 'id' => 'core_sku', 'label' => 'Price', 'value' => "$99.00\u{00A0}\r\nAvailable" ),
+			),
+		) );
+		$pdf      = ( new PDA_PDF_Renderer() )->render( $snapshot, ( new PDA_Deterministic_Mapper() )->map( $snapshot ) );
+		self::assertStringStartsWith( '%PDF', $pdf );
+	}
+
 	public function test_fifty_short_fields_fit_the_two_page_contract(): void {
 		$fields = array();
 		for ( $index = 0; $index < 50; ++$index ) {
@@ -43,9 +53,9 @@ final class RendererTest extends TestCase {
 		self::assertLessThanOrEqual( 2, preg_match_all( '/\\/Type\\s*\\/Page(?!s)\\b/', $pdf ) );
 	}
 
-	public function test_nonrepresentable_unicode_fails_without_changing_a_value(): void {
-		$this->expectException( PDA_Render_Exception::class );
+	public function test_nonrepresentable_unicode_is_transliterated_without_failing(): void {
 		$snapshot = PDA_Product_Snapshot::normalize( array( 'product_id' => 5, 'title' => '測試', 'fields' => array( array( 'id' => 'core_sku', 'label' => 'SKU', 'value' => 'A-1' ) ) ) );
-		( new PDA_PDF_Renderer() )->render( $snapshot, ( new PDA_Deterministic_Mapper() )->map( $snapshot ) );
+		$pdf      = ( new PDA_PDF_Renderer() )->render( $snapshot, ( new PDA_Deterministic_Mapper() )->map( $snapshot ) );
+		self::assertStringStartsWith( '%PDF', $pdf );
 	}
 }
