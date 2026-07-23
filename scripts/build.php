@@ -35,8 +35,6 @@ if ( 0 !== $exit_code ) {
 	throw new RuntimeException( 'Composer production install failed.' );
 }
 generate_fonts( $plugin_stage );
-unlink( $plugin_stage . DIRECTORY_SEPARATOR . 'composer.json' );
-unlink( $plugin_stage . DIRECTORY_SEPARATOR . 'composer.lock' );
 echo "Built {$mode}: {$plugin_stage}\n";
 
 /** @param array<int,string> $excluded */

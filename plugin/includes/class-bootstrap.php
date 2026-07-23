@@ -17,7 +17,7 @@ class PDA_Bootstrap {
 	 * @return void
 	 */
 	public static function activate() {
-		// The compatibility gate runs on plugins_loaded and translations start at init.
+		// The compatibility gate runs on plugins_loaded; WordPress loads language packs on demand.
 		update_option( 'pda_incompatible', '', false );
 		if ( false === get_option( PDA_Settings::OPTION, false ) ) {
 			add_option( PDA_Settings::OPTION, PDA_Settings::defaults(), '', false );
@@ -32,7 +32,6 @@ class PDA_Bootstrap {
 	 * @return void
 	 */
 	public static function init() {
-		add_action( 'init', array( __CLASS__, 'load_textdomain' ) );
 		$error_code = PDA_Compatibility::error_code();
 
 		if ( (string) get_option( 'pda_incompatible', '' ) !== $error_code ) {
@@ -63,15 +62,6 @@ class PDA_Bootstrap {
 			require_once PDA_DIR . 'premium/class-premium-bootstrap.php';
 			PDA_Premium_Bootstrap::init( self::$runner, $store, $telemetry, $ai_client );
 		}
-	}
-
-	/**
-	 * Register the plugin language path only once WordPress has initialized.
-	 *
-	 * @return void
-	 */
-	public static function load_textdomain() {
-		load_plugin_textdomain( 'product-datasheet-autopilot', false, dirname( plugin_basename( PDA_FILE ) ) . '/languages' );
 	}
 
 	/**

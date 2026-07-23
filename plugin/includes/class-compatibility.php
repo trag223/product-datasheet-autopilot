@@ -49,13 +49,25 @@ class PDA_Compatibility {
 	public static function reason() {
 		switch ( self::error_code() ) {
 			case 'php_version':
-				return sprintf( __( 'Product Datasheet Autopilot requires PHP %s or newer.', 'product-datasheet-autopilot' ), self::MIN_PHP );
+				return sprintf(
+					/* translators: %s: minimum required PHP version. */
+					__( 'Product Datasheet Autopilot requires PHP %s or newer.', 'product-datasheet-autopilot' ),
+					self::MIN_PHP
+				);
 			case 'wordpress_version':
-				return sprintf( __( 'Product Datasheet Autopilot requires WordPress %s or newer.', 'product-datasheet-autopilot' ), self::MIN_WP );
+				return sprintf(
+					/* translators: %s: minimum required WordPress version. */
+					__( 'Product Datasheet Autopilot requires WordPress %s or newer.', 'product-datasheet-autopilot' ),
+					self::MIN_WP
+				);
 			case 'woocommerce_missing':
 				return __( 'Product Datasheet Autopilot requires WooCommerce to be active.', 'product-datasheet-autopilot' );
 			case 'woocommerce_version':
-				return sprintf( __( 'Product Datasheet Autopilot requires WooCommerce %s or newer.', 'product-datasheet-autopilot' ), self::MIN_WOO );
+				return sprintf(
+					/* translators: %s: minimum required WooCommerce version. */
+					__( 'Product Datasheet Autopilot requires WooCommerce %s or newer.', 'product-datasheet-autopilot' ),
+					self::MIN_WOO
+				);
 			default:
 				return '';
 		}

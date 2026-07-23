@@ -55,6 +55,7 @@ class PDA_Download_Endpoint {
 		header( 'Cache-Control: public, max-age=3600' );
 		header( 'Content-Length: ' . filesize( $current['path'] ) );
 		$this->telemetry->record( 'download_served' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 		readfile( $current['path'] );
 		exit;
 	}
