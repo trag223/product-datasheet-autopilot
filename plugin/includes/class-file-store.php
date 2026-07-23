@@ -47,7 +47,11 @@ class PDA_File_Store {
 		if ( false === file_put_contents( $temp, $pdf, LOCK_EX ) ) {
 			return false;
 		}
-		if ( ! $this->is_valid_file( $temp ) || ! @rename( $temp, $path ) ) {
+		$valid_temp = $this->is_valid_file( $temp );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
+		$published = $valid_temp && @rename( $temp, $path );
+		if ( ! $published ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 			@unlink( $temp );
 			return false;
 		}
