@@ -25,6 +25,8 @@ define( 'PDA_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PDA_URL', plugin_dir_url( __FILE__ ) );
 
 $pda_autoload = PDA_DIR . 'vendor/autoload.php';
+
+// Packaged builds provide this file; static checks and incomplete installs must not fatal.
 if ( file_exists( $pda_autoload ) ) {
 	require_once $pda_autoload;
 }

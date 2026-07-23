@@ -17,7 +17,8 @@ class PDA_Bootstrap {
 	 * @return void
 	 */
 	public static function activate() {
-		update_option( 'pda_incompatible', PDA_Compatibility::reason(), false );
+		// The compatibility gate runs on plugins_loaded and translations start at init.
+		update_option( 'pda_incompatible', '', false );
 		if ( false === get_option( PDA_Settings::OPTION, false ) ) {
 			add_option( PDA_Settings::OPTION, PDA_Settings::defaults(), '', false );
 		}
@@ -31,8 +32,14 @@ class PDA_Bootstrap {
 	 * @return void
 	 */
 	public static function init() {
-		load_plugin_textdomain( 'product-datasheet-autopilot', false, dirname( plugin_basename( PDA_FILE ) ) . '/languages' );
-		if ( ! PDA_Compatibility::is_compatible() ) {
+		add_action( 'init', array( __CLASS__, 'load_textdomain' ) );
+		$error_code = PDA_Compatibility::error_code();
+
+		if ( (string) get_option( 'pda_incompatible', '' ) !== $error_code ) {
+			update_option( 'pda_incompatible', $error_code, false );
+		}
+
+		if ( '' !== $error_code ) {
 			add_action( 'admin_notices', array( __CLASS__, 'compatibility_notice' ) );
 			return;
 		}
@@ -56,6 +63,15 @@ class PDA_Bootstrap {
 			require_once PDA_DIR . 'premium/class-premium-bootstrap.php';
 			PDA_Premium_Bootstrap::init( self::$runner, $store, $telemetry, $ai_client );
 		}
+	}
+
+	/**
+	 * Register the plugin language path only once WordPress has initialized.
+	 *
+	 * @return void
+	 */
+	public static function load_textdomain() {
+		load_plugin_textdomain( 'product-datasheet-autopilot', false, dirname( plugin_basename( PDA_FILE ) ) . '/languages' );
 	}
 
 	/**

@@ -30,6 +30,12 @@ jobs:
       - run: npm test
       - run: npm run build:free
       - run: npm run build:pro
+      - name: Install Plugin Check runtime dependencies
+        run: |
+          cp composer.json plugin/composer.json
+          cp composer.lock plugin/composer.lock
+          composer install --no-dev --prefer-dist --no-interaction --working-dir=plugin
+          rm plugin/composer.json plugin/composer.lock
       - name: Plugin Check
         uses: wordpress/plugin-check-action@v1
         with:
